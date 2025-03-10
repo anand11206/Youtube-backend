@@ -30,8 +30,7 @@ const userSchema = new mongoose.Schema(
             required : [true,"Password is required"]
         },
         refreshToken:{
-            type: String,
-            unique :true
+            type: String
         },
         watchHistory:{
             type: mongoose.Schema.Types.ObjectId,
@@ -42,6 +41,7 @@ const userSchema = new mongoose.Schema(
         timestamps:true
     }
 )
+
 
 // encryption of password 
 userSchema.pre("save", async function(next){
