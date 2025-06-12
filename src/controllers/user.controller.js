@@ -91,7 +91,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
     const {email, username, password} = req.body
     
-    if(!username && !email){
+    if(!username.trim() && !email.trim()){
         throw new ApiError(400, "One of username and email is required")
     }
 
@@ -193,9 +193,149 @@ const refreshAccessToken = asyncHandler(async(req,res) => {
     )
 })
 
+const changeCurrentPassword = asyncHandler(async(req, res) => {
+    const {oldPassword, newPassword} = req.body
+    if(!oldPassword || !newPassword){
+        throw new ApiError(400, "All fields required")
+    }
+    const user = await User.findById(req.user._id)
+    if(!user){
+        throw new ApiError(400, "Invalid Request")
+    }
+    if(!user.isPasswordCorrect(oldPassword)){
+        throw new ApiError(400, "Wrong Old Password")
+    }
+    user.password = newPassword
+    user.save({validateBeforeSave:false})
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed"))
+
+})
+
+const updateAccountDetails = asyncHandler(async(req, res) => {
+    const {fullName, email} = req.body
+    if(!fullName.trim() && !email.trim()) {
+        throw new ApiError(400, "Atleast one field required")
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id,
+    {
+        $set:{
+            fullName,
+            email:email
+
+        }
+    },
+    {
+        new:true
+    }).select("-password -refreshToken")
+    return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Details changed Successfully"))
+})
+
+const updateAvatarAndCoverImage = asyncHandler(async(req, res) => {
+    console.log(req.files);
+    const avatarLocalPath = req.files?.avatar?.[0].path
+    const coverImageLocalPath = req.files?.coverImage?.[0].path
+
+    if(!avatarLocalPath){
+        throw new ApiError(400, "Avatar file is required")
+    }
+    const avatar = await uploader(avatarLocalPath)
+    if(!avatar){
+        throw new ApiError(400, "Error while uploading avatar")
+    }
+    let coverImage;
+    try {
+        
+        if(coverImageLocalPath){
+            coverImage = await uploader(coverImageLocalPath)
+        }
+    } catch (error) {
+        throw new ApiError(400, error?.message || "cover Image Local Path not found")
+    }
+    const user = await User.findByIdAndUpdate(req.user._id,
+        {
+            $set:{
+                avatar:avatar.url,
+                coverImage:coverImage?.url || ""
+            }
+        },
+        {
+            new:true
+        }
+    ).select("-password -refreshToken")
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Files Uploaded"))
+})
+
+const getUserChannelProfile = asyncHandler(async(req, res) => {
+    const {username} = req.params
+    if(!username){
+        throw new ApiError(400, "Username missing")
+    }
+
+    const channel = await User.aggregate(
+        {
+            $match:{
+                username:username
+            }
+        },
+        {
+            $lookup:{
+                from:"subscriptions",
+                localField:"_id",
+                foreignField:"channel",
+                as:"subscribers"
+            }
+        },
+        {
+            $lookup:{
+                from:"subscriptions",
+                localField:"_id",
+                foreignField:"subscriber",
+                as:"subscribedTo"
+            }
+        },
+        {
+            $addField:{
+                subscriberCount:{
+                    $size:"$subscribers"
+                },
+                channelSubscribedToCount:{
+                    $size:"$subscribedTo"
+                },
+                isSubscribed:{
+                    cond:{
+                        if:{$in:[req.user._id, "$subscribers.subscriber"]},
+                        then:true,
+                        else:false
+                    }
+                }
+            }
+        }
+    )
+    if(!channel){
+        throw new ApiError(400, "Channel does not exist")
+    }
+    console.log(channel);
+    return res
+    .status(200)
+    .json(new ApiResponse(200, channel[0], "Channel details found"))
+})
+
 export {
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentPassword,
+    updateAccountDetails,
+    updateAvatarAndCoverImage,
+    getUserChannelProfile
 }
