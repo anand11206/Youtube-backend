@@ -1,4 +1,4 @@
-# 📺 YouTube Backend Clone
+# 📺 YouTube Backend
 
 A scalable and modular backend clone of YouTube built with **Node.js** and **Express.js**, featuring user authentication, video management — inspired by YouTube’s core features.
 
